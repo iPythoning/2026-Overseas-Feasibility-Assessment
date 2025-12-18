@@ -19,11 +19,6 @@ const Result: React.FC<ResultProps> = ({ answers, onRestart, onDashboard }) => {
   const [contactForm, setContactForm] = useState({ name: '', phone: '', company: '' });
   const [formSubmitted, setFormSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  // Multi-Channel Sync States
-  const [notionSync, setNotionSync] = useState<'idle' | 'success' | 'error'>('idle');
-  const [emailNotify, setEmailNotify] = useState<'idle' | 'success' | 'error'>('idle');
-  const [sheetsSync, setSheetsSync] = useState<'idle' | 'success' | 'error'>('idle');
 
   useEffect(() => {
     let total = 0;
@@ -65,9 +60,6 @@ const Result: React.FC<ResultProps> = ({ answers, onRestart, onDashboard }) => {
   const handleContactSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    setNotionSync('idle');
-    setEmailNotify('idle');
-    setSheetsSync('idle');
     
     const submissionData = {
         name: contactForm.name,
@@ -75,64 +67,56 @@ const Result: React.FC<ResultProps> = ({ answers, onRestart, onDashboard }) => {
         company: contactForm.company,
         score: score,
         categoryTitle: resultCategory.title,
-        source: '2026 Overseas Assessment Tool',
+        source: 'PulseAgent-Overseas-2026',
         submissionDate: new Date().toISOString(),
-        localTime: new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
+        localTime: new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
+        userAgent: navigator.userAgent
     };
 
-    // 1. Local Persistence (Safety First)
+    // 1. 本地备份
     saveContactSubmission(submissionData);
 
-    // --- External Integrations ---
-    // Make.com flows for Notion and Email
+    // --- 接口地址 ---
     const NOTION_WEBHOOK = 'https://hook.us2.make.com/99om425n81mvqqruaeekingcpg8h98qx'; 
     const EMAIL_NOTIFY_WEBHOOK = 'https://hook.us2.make.com/99om425n81mvqqruaeekingcpg8h98qx';
-    // Google Sheets Apps Script Web App URL
     const SHEETS_WEBHOOK = 'https://script.google.com/macros/s/AKfycbzgWnU7do9Q5kWK8QnfbpvI-j-P4AD9Bj7vA0Lbpei3_VaPmZG_D7XCwZPTQwJUnI_r/exec';
 
     try {
-        // Parallel execution for best UX
-        const results = await Promise.allSettled([
-            // Sync to Notion
+        // 静默并行执行所有同步任务
+        await Promise.allSettled([
+            // Notion 同步
             fetch(NOTION_WEBHOOK, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(submissionData)
             }),
-            // Notify Admin
+            // 邮件通知
             fetch(EMAIL_NOTIFY_WEBHOOK, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ...submissionData, _triggerEmail: true })
             }),
-            // Log to Google Sheets
+            // Google Sheets 同步 (优化微信环境)
             fetch(SHEETS_WEBHOOK, {
                 method: 'POST',
-                mode: 'no-cors', // Apps Script requires no-cors for simple POST redirection
+                mode: 'no-cors', 
+                cache: 'no-cache',
+                redirect: 'follow',
                 headers: { 'Content-Type': 'text/plain' },
                 body: JSON.stringify(submissionData)
             })
         ]);
 
-        // Update Sync Statuses
-        if (results[0].status === 'fulfilled' && (results[0].value as Response).ok) setNotionSync('success');
-        else setNotionSync('error');
-
-        if (results[1].status === 'fulfilled') setEmailNotify('success');
-        else setEmailNotify('error');
-
-        if (results[2].status === 'fulfilled') setSheetsSync('success');
-        else setSheetsSync('error');
-
+        // 直接标记成功，不展示具体的同步状态
         setFormSubmitted(true);
         
-        // Scroll to the unlocked action items
+        // 自动滚动到解锁后的行动建议区域
         setTimeout(() => {
           document.getElementById('action-items-section')?.scrollIntoView({ behavior: 'smooth' });
         }, 500);
     } catch (error) {
-        console.error('Integration error:', error);
-        setFormSubmitted(true); // Don't block the user
+        console.error('Submission silent sync partially failed:', error);
+        setFormSubmitted(true); // 保证用户体验，即使后台报错也允许查看清单
     } finally {
         setIsSubmitting(false);
     }
@@ -144,7 +128,7 @@ const Result: React.FC<ResultProps> = ({ answers, onRestart, onDashboard }) => {
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-20">
-      {/* 1. PRIMARY SCORE CARD */}
+      {/* 1. 分数展示区 */}
       <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100 animate-fade-in">
         <div className={`p-12 text-center ${
             score >= 90 ? 'bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-600' :
@@ -192,32 +176,32 @@ const Result: React.FC<ResultProps> = ({ answers, onRestart, onDashboard }) => {
         </div>
       </div>
 
-      {/* 2. CONVERSION SECTION */}
+      {/* 2. 专家预约区 (解锁门槛) */}
       <div className={`transition-all duration-700 ${formSubmitted ? 'opacity-60 scale-[0.98]' : 'scale-100'}`}>
         <div className="bg-slate-900 rounded-3xl shadow-2xl overflow-hidden text-white border border-slate-800">
             <div className="p-10 md:p-16 flex flex-col lg:flex-row items-center gap-16">
                 <div className="lg:w-1/2">
                     <div className="inline-block px-4 py-1.5 bg-indigo-500 rounded text-[11px] font-black tracking-[0.2em] uppercase mb-6 shadow-lg shadow-indigo-500/20">
-                        Unlock Strategy
+                        Limited Access
                     </div>
                     <h3 className="text-4xl md:text-5xl font-black mb-8 leading-[1.1] tracking-tight text-white">
-                        获取您的<br/>
+                        解锁您的<br/>
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-emerald-400">专属出海行动清单</span>
                     </h3>
                     <p className="text-slate-400 mb-10 text-lg font-medium leading-relaxed">
-                        基于您的测评得分，PulseAgent 已生成定制化出海策略。填写信息解锁清单，数据将实时同步至我们的专家库匹配。
+                        基于您的测评得分，PulseAgent 已生成定制化落地策略。完成预约后，下方行动清单将立即开启。
                     </p>
                     
                     <div className="flex flex-col gap-6">
                         <div className="flex items-center gap-4 text-xs text-slate-400 font-bold bg-slate-800/50 p-4 rounded-2xl border border-slate-800">
                             <div className="flex -space-x-2">
                                 {[1, 2, 3].map(i => (
-                                    <img key={i} src={`https://i.pravatar.cc/100?img=${i+40}`} alt="Expert" className="w-10 h-10 rounded-full border-2 border-slate-900 shadow-xl" />
+                                    <img key={i} src={`https://i.pravatar.cc/100?img=${i+60}`} alt="Expert" className="w-10 h-10 rounded-full border-2 border-slate-900 shadow-xl" />
                                 ))}
                             </div>
                             <span className="leading-snug text-[10px] uppercase tracking-wider font-black">
-                                <span className="text-white">Active Record Keeping:</span><br/>
-                                Notion + Email + Google Sheets
+                                <span className="text-white">Professional Consultation:</span><br/>
+                                专家将在 24 小时内联系您
                             </span>
                         </div>
                     </div>
@@ -250,53 +234,30 @@ const Result: React.FC<ResultProps> = ({ answers, onRestart, onDashboard }) => {
                                     {isSubmitting ? (
                                         <div className="flex items-center gap-3">
                                             <svg className="animate-spin h-6 w-6 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                                            <span className="text-lg">多渠道同步中...</span>
+                                            <span className="text-lg">正在解锁...</span>
                                         </div>
                                     ) : (
                                         <>
                                             <span className="text-lg uppercase tracking-wider">立即解锁并预约指导</span>
-                                            <span className="text-[10px] opacity-60 font-black">SYNC TO CLOUD + SHEETS</span>
+                                            <span className="text-[10px] opacity-60 font-black">UNLOCK STRATEGY NOW</span>
                                         </>
                                     )}
                                 </button>
                             </form>
                         ) : (
-                            <div className="text-center py-8 px-4 animate-scale-in">
-                                <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-6">
-                                    <svg className="w-8 h-8 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
+                            <div className="text-center py-12 px-4 animate-scale-in">
+                                <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-8">
+                                    <svg className="w-10 h-10 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
                                 </div>
-                                <h4 className="text-2xl font-black text-slate-900 mb-1">Lead Captured!</h4>
-                                <p className="text-slate-500 font-bold text-xs mb-8">数据已成功同步至全球管理系统</p>
-                                
-                                <div className="space-y-2.5">
-                                    <div className="flex items-center justify-between p-3 rounded-lg bg-indigo-50 border border-indigo-100">
-                                        <div className="flex items-center gap-2">
-                                            <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-                                            <span className="text-[10px] font-black text-indigo-800 uppercase tracking-widest">Notion DB</span>
-                                        </div>
-                                        <span className={`text-[9px] font-black px-2 py-0.5 rounded ${notionSync === 'success' ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
-                                            {notionSync === 'success' ? 'SYNCED' : 'PENDING'}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center justify-between p-3 rounded-lg bg-blue-50 border border-blue-100">
-                                        <div className="flex items-center gap-2">
-                                            <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
-                                            <span className="text-[10px] font-black text-blue-800 uppercase tracking-widest">Admin Email</span>
-                                        </div>
-                                        <span className={`text-[9px] font-black px-2 py-0.5 rounded ${emailNotify === 'success' ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
-                                            {emailNotify === 'success' ? 'NOTIFIED' : 'PENDING'}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center justify-between p-3 rounded-lg bg-emerald-50 border border-emerald-100">
-                                        <div className="flex items-center gap-2">
-                                            <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path></svg>
-                                            <span className="text-[10px] font-black text-emerald-800 uppercase tracking-widest">Google Sheet</span>
-                                        </div>
-                                        <span className={`text-[9px] font-black px-2 py-0.5 rounded ${sheetsSync === 'success' ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
-                                            {sheetsSync === 'success' ? 'LOGGED' : 'PENDING'}
-                                        </span>
-                                    </div>
+                                <h4 className="text-3xl font-black text-slate-900 mb-2">预约成功！</h4>
+                                <p className="text-slate-500 font-bold text-sm mb-4">您的专属出海清单已开启</p>
+                                <div className="inline-block px-4 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-black uppercase tracking-widest">
+                                    Strategy Unlocked
                                 </div>
+                                <p className="mt-8 text-[11px] text-slate-400 leading-relaxed">
+                                    专家已收到您的测评结果，<br/>
+                                    我们将尽快为您提供更深度的商业建议。
+                                </p>
                             </div>
                         )}
                     </div>
@@ -305,31 +266,42 @@ const Result: React.FC<ResultProps> = ({ answers, onRestart, onDashboard }) => {
         </div>
       </div>
 
-      {/* 3. ACTION LIST */}
+      {/* 3. 行动清单 - 预约成功后才无遮挡展示 */}
       <div id="action-items-section" className="relative group scroll-mt-24">
         {!formSubmitted && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center backdrop-blur-md bg-white/40 rounded-3xl border-2 border-dashed border-gray-200 p-8 text-center">
+            <div className="absolute inset-0 z-10 flex items-center justify-center backdrop-blur-md bg-white/40 rounded-3xl border-2 border-dashed border-gray-200 p-8 text-center transition-all">
                 <div className="max-w-sm">
                     <div className="w-16 h-16 bg-white rounded-2xl shadow-xl flex items-center justify-center mx-auto mb-6">
                         <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
                     </div>
                     <h4 className="text-xl font-black text-gray-900 mb-3">行动清单暂未解锁</h4>
-                    <p className="text-gray-500 text-sm font-bold uppercase tracking-tighter italic">完成上方预约，立即解锁针对您 {score} 分情况的建议。</p>
+                    <p className="text-gray-500 text-sm font-bold uppercase tracking-tighter italic leading-relaxed">完成上方预约，立即获取针对您 {score} 分情况的 4 条关键动作建议。</p>
                 </div>
             </div>
         )}
 
         <div className={`bg-white rounded-3xl shadow-xl border border-gray-100 p-10 md:p-14 transition-all duration-1000 ${!formSubmitted ? 'blur-sm grayscale opacity-30 select-none' : 'opacity-100'}`}>
-            <h3 className="text-2xl font-black text-gray-900 mb-10 flex items-center">
-                <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center mr-5">
-                    <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
-                </div>
-                针对性行动清单
-            </h3>
+            <div className="flex items-center justify-between mb-10">
+                <h3 className="text-2xl font-black text-gray-900 flex items-center">
+                    <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center mr-5">
+                        <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
+                    </div>
+                    针对性行动清单
+                </h3>
+                {formSubmitted && (
+                    <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full uppercase tracking-widest border border-emerald-100">
+                        Custom Plan
+                    </span>
+                )}
+            </div>
+            
             <div className="grid sm:grid-cols-2 gap-8">
                 {resultCategory.advice.map((item, idx) => (
-                    <div key={idx} className="group p-8 rounded-2xl border-2 border-gray-50 bg-slate-50 hover:bg-white hover:shadow-2xl hover:border-indigo-100 transition-all cursor-default">
-                        <div className="flex items-start">
+                    <div key={idx} className="group p-8 rounded-2xl border-2 border-gray-50 bg-slate-50 hover:bg-white hover:shadow-2xl hover:border-indigo-100 transition-all cursor-default relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-2 opacity-5">
+                            <span className="text-8xl font-black text-indigo-900">{idx + 1}</span>
+                        </div>
+                        <div className="flex items-start relative z-10">
                             <span className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-indigo-600 text-white font-black text-xs mr-5 mt-1">
                                 {idx + 1}
                             </span>
@@ -341,7 +313,7 @@ const Result: React.FC<ResultProps> = ({ answers, onRestart, onDashboard }) => {
         </div>
       </div>
 
-      {/* Navigation Footer */}
+      {/* 底部导航 */}
       <div className="flex flex-col sm:flex-row gap-5 justify-center pt-10">
         <button onClick={onRestart} className="px-12 py-5 bg-white text-slate-500 font-black rounded-2xl border-2 border-slate-200 hover:border-slate-400 transition-all text-xs uppercase tracking-[0.2em]">重新测评</button>
         <button onClick={onDashboard} className="px-12 py-5 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-700 shadow-2xl shadow-indigo-200 transition-all text-xs uppercase tracking-[0.2em]">查看大数据</button>
