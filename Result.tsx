@@ -171,7 +171,7 @@ const Result: React.FC<ResultProps> = ({ answers, onRestart, onDashboard }) => {
       <div className="bg-gradient-to-br from-indigo-700 to-blue-800 rounded-xl shadow-xl overflow-hidden text-white relative">
         <div className="relative p-8 md:p-10 md:flex md:items-center md:gap-10">
             <div className="md:w-1/2 mb-8 md:mb-0">
-                <h3 className="text-2xl md:text-3xl font-bold mb-4">预约专家一对一指导</h3>
+                <h3 className="text-2xl md:text-3xl font-bold mb-4">免费预约专家一对一指导</h3>
                 <p className="text-blue-100 mb-6">获取深度商业诊断与资源对接建议。</p>
             </div>
             <div className="md:w-1/2">
