@@ -205,7 +205,7 @@ const Result: React.FC<ResultProps> = ({ answers, onRestart, onDashboard }) => {
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-emerald-400">专属出海行动清单</span>
                     </h3>
                     <p className="text-slate-400 mb-10 text-lg font-medium leading-relaxed">
-                        基于您的测评得分，PulseAgent 已生成定制化出海策略。填写信息解锁清单，数据将实时同步至我们的专家库与 Google Sheets。
+                        基于您的测评得分，PulseAgent 已生成定制化出海策略。填写信息解锁清单，数据将实时同步至我们的专家库匹配。
                     </p>
                     
                     <div className="flex flex-col gap-6">
